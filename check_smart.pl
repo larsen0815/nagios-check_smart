@@ -70,7 +70,7 @@ if ($opt_d) {
 		exit $ERRORS{'UNKNOWN'};
 	}
 
-# don´t check anymore as this interferes with RAID
+# don't check anymore as this interferes with RAID
 #	if (-b $opt_d){
 		$device = $opt_d;
 #	}
