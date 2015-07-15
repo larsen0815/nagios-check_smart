@@ -15,6 +15,7 @@
 # 2015-01-23: larsen0815 - fixed some bugs
 # - Using "-d ata" brings "A mandatory SMART command failed: exiting." therefore not using it anymore. Works anyway.
 # - Separated megaraid from ata/scsi as either one can be found behind a megaraid controller
+# 2015-07-15: larsen0815 - added "HP Smart Array" (cciss) as RAID controller
 
 
 use strict;
@@ -38,14 +39,15 @@ unless (-f $smartctl) {
 	exit $ERRORS{'UNKNOWN'};
 }
 
-use vars qw($opt_d $opt_debug $opt_h $opt_i $opt_n $opt_v);
+use vars qw($opt_d $opt_debug $opt_h $opt_i $opt_r $opt_n $opt_v);
 Getopt::Long::Configure('bundling');
 GetOptions(
 						"debug"			=> \$opt_debug,
 	"d=s"	=> \$opt_d,	"device=s"		=> \$opt_d,
 	"h"		=> \$opt_h,	"help"			=> \$opt_h,
 	"i=s"	=> \$opt_i,	"interface=s"	=> \$opt_i,
-	"n=s"	=> \$opt_n,	"number=s"		=> \$opt_n,
+	"r=s"	=> \$opt_r,	"raid=s"		=> \$opt_r,
+	"n=i"	=> \$opt_n,	"number=i"		=> \$opt_n,
 	"v"		=> \$opt_v,	"version"		=> \$opt_v,
 );
 
@@ -58,7 +60,9 @@ if ($opt_h) {
 	print_help();
 	exit $ERRORS{'OK'};
 }
-my ($device, $interface, $number) = qw//;
+
+# Check command line options
+my ($device, $interface, $raid, $number) = qw//;
 if ($opt_d) {
 	unless($opt_i){
 		print "Must specify an interface for $opt_d using -i/--interface!\n\n";
@@ -78,10 +82,6 @@ if ($opt_d) {
 
 	if(grep {$opt_i eq $_} ('ata', 'scsi')){
 		$interface = $opt_i;
-		if(defined($opt_n)){
-			# id of disk behind a megaraid controller
-			$number = $opt_n;
-		}
 	}
 	else{
 		print "Invalid interface $opt_i for $opt_d!\n\n";
@@ -95,13 +95,37 @@ else{
 	exit $ERRORS{'UNKNOWN'};
 }
 
+# RAID options
+if ($opt_r) {
+	if(grep {$opt_r eq $_} ('megaraid', 'cciss')){
+		$raid = $opt_r;
+	}
+	else{
+		print "Invalid RAID $opt_r!\n\n";
+		print_help();
+		exit $ERRORS{'UNKNOWN'};
+	}
+
+	unless(defined($opt_n)){
+		print "Must specify a disk number for $opt_r using -n/--number!\n\n";
+		print_help();
+		exit $ERRORS{'UNKNOWN'};
+	}
+	else{
+		# ID of disk behind RAID controller
+		$number = $opt_n;
+	}
+}
+
+# Prepare SMART command and params
 my $smart_command = '/usr/bin/sudo '.$smartctl;
 my @error_messages = qw//;
 my $exit_status = 'OK';
 
 my $smart_params = ' '.$device;
-if(defined($number)){
-	$smart_params = $smart_params.' -d megaraid,'.$number;
+
+if(defined($raid) && defined($number)){
+	$smart_params = $smart_params.' -d '.$raid.','.$number;
 }
 
 warn "###########################################################\n" if $opt_debug;
@@ -305,11 +329,12 @@ exit $ERRORS{$exit_status};
 
 sub print_help {
 	print_revision($basename,$revision);
-	print "Usage: $basename (--device=<SMART device> --interface=(ata|scsi)|-h|-v) [--number=<disk ID>] [--debug]\n";
+	print "Usage: $basename (--device=<SMART device> --interface=(ata|scsi)|-h|-v) [--raid=(megaraid|cciss) --number=<disk ID>] [--debug]\n";
 	print "  --debug: show debugging information\n";
 	print "  -d/--device: a device to be SMART monitored, eg /dev/sda\n";
 	print "  -i/--interface: ata/scsi depending upon the device's interface type\n";
-	print "  -n/--number: physical disk number within a MegaRAID controller\n";
+	print "  -r/--raid: megaraid|cciss if using a RAID\n";
+	print "  -n/--number: physical disk number within a RAID controller\n";
 	print "  -h/--help: this help\n";
 	print "  -v/--version: Version number\n";
 	support();
